@@ -5,6 +5,7 @@ let trackingData = [];
 let isTracking = false;
 let trackingStartTime = null;
 let trackingInterval = null;
+let latestMetrics = null;
 const TRACKING_DURATION = 5 * 60 * 1000; // 5분
 const MAX_DATA_POINTS = 60;
 
@@ -197,15 +198,20 @@ function updateUI(data) {
 
     // 디스크
     const diskList = document.getElementById('diskList');
-    diskList.innerHTML = data.disk.disks.slice(0, 3).map(disk => `
+    diskList.innerHTML = data.disk.disks.slice(0, 3).map(disk => {
+        const mountEscaped = disk.mount.replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
+        return `
     <div class="disk-item">
       <div class="disk-header">
-        <span class="disk-mount">${disk.mount}</span>
+        <span class="disk-mount">${mountEscaped}</span>
         <span class="disk-usage">${disk.usagePercent}%</span>
       </div>
       <div class="disk-bar"><div class="disk-used" style="width: ${disk.usagePercent}%"></div></div>
     </div>
-  `).join('');
+  `;
+    }).join('');
 
     document.getElementById('diskRead').textContent = formatSpeed(data.disk.io.readSpeed);
     document.getElementById('diskWrite').textContent = formatSpeed(data.disk.io.writeSpeed);
@@ -217,9 +223,12 @@ function updateUI(data) {
     const gpuInfo = document.getElementById('gpuInfo');
     if (data.gpu && data.gpu.length > 0) {
         const gpu = data.gpu[0];
+        const gpuModelEscaped = (gpu.model || 'GPU').replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
         gpuInfo.innerHTML = `
       <div class="gpu-details">
-        <div class="gpu-model">${gpu.model || 'GPU'}</div>
+        <div class="gpu-model">${gpuModelEscaped}</div>
         <div class="gpu-stats">
           <div class="gpu-stat"><span class="stat-label">VRAM</span><span class="stat-value">${gpu.vram ? gpu.vram + ' MB' : 'N/A'}</span></div>
           <div class="gpu-stat"><span class="stat-label">온도</span><span class="stat-value">${gpu.temperatureGpu ? gpu.temperatureGpu + '°C' : 'N/A'}</span></div>
@@ -416,9 +425,6 @@ socket.on('metrics', (data) => {
     latestMetrics = data; // 최신 데이터 저장
 });
 
-// ===== 최신 메트릭 저장 =====
-let latestMetrics = null;
-
 // ===== 모달 기능 =====
 const modalOverlay = document.getElementById('modalOverlay');
 const modalTitle = document.getElementById('modalTitle');
@@ -452,7 +458,11 @@ document.getElementById('cpuCard').addEventListener('click', () => {
     const usageClass = cpu.usage > 80 ? 'danger' : cpu.usage > 50 ? 'warning' : 'highlight';
     const tempClass = cpu.temperature > 80 ? 'danger' : cpu.temperature > 60 ? 'warning' : 'success';
 
-    const coresHtml = cpu.cores ? cpu.cores.map((core, i) => `
+    const escapeHtml = (str) => str.replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+
+    const coresHtml = cpu.coreLoads ? cpu.coreLoads.map((core, i) => `
         <div class="core-item">
             <div class="core-label">코어 ${i}</div>
             <div class="core-value">${core.load.toFixed(1)}%</div>
@@ -461,10 +471,14 @@ document.getElementById('cpuCard').addEventListener('click', () => {
 
     const processesHtml = processes && processes.topCpu ? processes.topCpu.map(p => `
         <div class="process-item">
-            <span class="process-name">${p.name}</span>
+            <span class="process-name">${escapeHtml(p.name)}</span>
             <span class="process-usage">${p.cpu}%</span>
         </div>
     `).join('') : '<div>프로세스 정보 없음</div>';
+
+    const escapeHtml = (str) => str.replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
 
     openModal('🔲 CPU 상세 정보', `
         <div class="detail-section">
@@ -472,7 +486,7 @@ document.getElementById('cpuCard').addEventListener('click', () => {
             <div class="detail-grid">
                 <div class="detail-box">
                     <div class="detail-box-label">CPU 모델</div>
-                    <div class="detail-box-value">${cpu.brand || 'N/A'}</div>
+                    <div class="detail-box-value">${escapeHtml(cpu.brand || 'N/A')}</div>
                 </div>
                 <div class="detail-box">
                     <div class="detail-box-label">현재 사용률</div>
@@ -484,7 +498,7 @@ document.getElementById('cpuCard').addEventListener('click', () => {
                 </div>
                 <div class="detail-box">
                     <div class="detail-box-label">논리 코어</div>
-                    <div class="detail-box-value">${cpu.cores ? cpu.cores.length : 'N/A'}</div>
+                    <div class="detail-box-value">${cpu.coreLoads ? cpu.coreLoads.length : 'N/A'}</div>
                 </div>
                 <div class="detail-box">
                     <div class="detail-box-label">온도</div>
@@ -515,9 +529,13 @@ document.getElementById('memoryCard').addEventListener('click', () => {
     const processes = latestMetrics.processes;
     const usageClass = mem.usagePercent > 90 ? 'danger' : mem.usagePercent > 70 ? 'warning' : 'purple';
 
+    const escapeHtml = (str) => str.replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+
     const processesHtml = processes && processes.topMemory ? processes.topMemory.map(p => `
         <div class="process-item">
-            <span class="process-name">${p.name}</span>
+            <span class="process-name">${escapeHtml(p.name)}</span>
             <span class="process-usage" style="color: #8b5cf6;">${p.memory}% (${formatBytes(p.memRss * 1024)})</span>
         </div>
     `).join('') : '<div>프로세스 정보 없음</div>';
@@ -572,9 +590,13 @@ document.getElementById('networkCard').addEventListener('click', () => {
     if (!latestMetrics) return;
     const net = latestMetrics.network;
 
+    const escapeHtml = (str) => str.replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+
     const interfacesHtml = net.interfaces.map(iface => `
         <div class="detail-box" style="grid-column: span 2;">
-            <div class="detail-box-label">${iface.name}</div>
+            <div class="detail-box-label">${escapeHtml(iface.name)}</div>
             <div style="display: flex; gap: 2rem; margin-top: 0.5rem;">
                 <div><span style="color: #06b6d4;">⬇️ ${formatSpeed(iface.rxSpeed)}</span></div>
                 <div><span style="color: #10b981;">⬆️ ${formatSpeed(iface.txSpeed)}</span></div>
@@ -618,12 +640,16 @@ document.getElementById('diskCard').addEventListener('click', () => {
     if (!latestMetrics) return;
     const disk = latestMetrics.disk;
 
+    const escapeHtml = (str) => str.replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+
     const disksHtml = disk.disks.map(d => {
         const usageClass = d.usagePercent > 90 ? 'danger' : d.usagePercent > 70 ? 'warning' : 'success';
         return `
         <div class="detail-box" style="grid-column: span 2;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div class="detail-box-label">${d.mount} (${d.type})</div>
+                <div class="detail-box-label">${escapeHtml(d.mount)} (${escapeHtml(d.type)})</div>
                 <div class="detail-box-value ${usageClass}" style="font-size: 1rem;">${d.usagePercent}%</div>
             </div>
             <div style="background: rgba(255,255,255,0.1); border-radius: 4px; height: 8px; margin: 0.5rem 0; overflow: hidden;">
@@ -674,13 +700,17 @@ document.getElementById('gpuCard').addEventListener('click', () => {
         return;
     }
 
+    const escapeHtml = (str) => str.replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+
     const gpusHtml = latestMetrics.gpu.map((gpu, i) => `
         <div class="detail-section">
-            <div class="detail-section-title">GPU ${i + 1}: ${gpu.model || 'Unknown'}</div>
+            <div class="detail-section-title">GPU ${i + 1}: ${escapeHtml(gpu.model || 'Unknown')}</div>
             <div class="detail-grid">
                 <div class="detail-box">
                     <div class="detail-box-label">제조사</div>
-                    <div class="detail-box-value">${gpu.vendor || 'N/A'}</div>
+                    <div class="detail-box-value">${escapeHtml(gpu.vendor || 'N/A')}</div>
                 </div>
                 <div class="detail-box">
                     <div class="detail-box-label">VRAM</div>
@@ -688,7 +718,7 @@ document.getElementById('gpuCard').addEventListener('click', () => {
                 </div>
                 <div class="detail-box">
                     <div class="detail-box-label">온도</div>
-                    <div class="detail-box-value ${gpu.temperatureGpu > 80 ? 'danger' : 'warning'}">${gpu.temperatureGpu ? gpu.temperatureGpu + '°C' : 'N/A'}</div>
+                    <div class="detail-box-value ${gpu.temperatureGpu ? (gpu.temperatureGpu > 80 ? 'danger' : 'warning') : 'default'}">${gpu.temperatureGpu ? gpu.temperatureGpu + '°C' : 'N/A'}</div>
                 </div>
                 <div class="detail-box">
                     <div class="detail-box-label">사용률</div>
