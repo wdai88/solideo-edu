@@ -38,6 +38,12 @@ function formatTime(ms) {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
+function escapeHtml(str) {
+    return str.replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+}
+
 function updateClock() {
     const now = new Date();
     document.getElementById('currentTime').textContent = now.toLocaleTimeString('ko-KR');
@@ -458,10 +464,6 @@ document.getElementById('cpuCard').addEventListener('click', () => {
     const usageClass = cpu.usage > 80 ? 'danger' : cpu.usage > 50 ? 'warning' : 'highlight';
     const tempClass = cpu.temperature > 80 ? 'danger' : cpu.temperature > 60 ? 'warning' : 'success';
 
-    const escapeHtml = (str) => str.replace(/[&<>"']/g, c => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[c]));
-
     const coresHtml = cpu.coreLoads ? cpu.coreLoads.map((core, i) => `
         <div class="core-item">
             <div class="core-label">코어 ${i}</div>
@@ -475,10 +477,6 @@ document.getElementById('cpuCard').addEventListener('click', () => {
             <span class="process-usage">${p.cpu}%</span>
         </div>
     `).join('') : '<div>프로세스 정보 없음</div>';
-
-    const escapeHtml = (str) => str.replace(/[&<>"']/g, c => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[c]));
 
     openModal('🔲 CPU 상세 정보', `
         <div class="detail-section">
@@ -528,10 +526,6 @@ document.getElementById('memoryCard').addEventListener('click', () => {
     const mem = latestMetrics.memory;
     const processes = latestMetrics.processes;
     const usageClass = mem.usagePercent > 90 ? 'danger' : mem.usagePercent > 70 ? 'warning' : 'purple';
-
-    const escapeHtml = (str) => str.replace(/[&<>"']/g, c => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[c]));
 
     const processesHtml = processes && processes.topMemory ? processes.topMemory.map(p => `
         <div class="process-item">
@@ -590,10 +584,6 @@ document.getElementById('networkCard').addEventListener('click', () => {
     if (!latestMetrics) return;
     const net = latestMetrics.network;
 
-    const escapeHtml = (str) => str.replace(/[&<>"']/g, c => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[c]));
-
     const interfacesHtml = net.interfaces.map(iface => `
         <div class="detail-box" style="grid-column: span 2;">
             <div class="detail-box-label">${escapeHtml(iface.name)}</div>
@@ -639,10 +629,6 @@ document.getElementById('diskCard').classList.add('clickable');
 document.getElementById('diskCard').addEventListener('click', () => {
     if (!latestMetrics) return;
     const disk = latestMetrics.disk;
-
-    const escapeHtml = (str) => str.replace(/[&<>"']/g, c => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[c]));
 
     const disksHtml = disk.disks.map(d => {
         const usageClass = d.usagePercent > 90 ? 'danger' : d.usagePercent > 70 ? 'warning' : 'success';
@@ -699,10 +685,6 @@ document.getElementById('gpuCard').addEventListener('click', () => {
         `);
         return;
     }
-
-    const escapeHtml = (str) => str.replace(/[&<>"']/g, c => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[c]));
 
     const gpusHtml = latestMetrics.gpu.map((gpu, i) => `
         <div class="detail-section">
