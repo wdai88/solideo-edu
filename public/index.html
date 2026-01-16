@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="실시간 시스템 리소스 모니터링 대시보드 - CPU, 메모리, 디스크, 네트워크, GPU 추적">
+  <title>시스템 리소스 모니터 | 실시간 대시보드</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- 헤더 -->
+    <header class="header">
+      <div class="header-left">
+        <div class="logo">
+          <span class="logo-icon">📊</span>
+          <h1>시스템 리소스 모니터</h1>
+        </div>
+        <div class="system-info" id="systemInfo">
+          <span class="badge">macOS</span>
+          <span class="uptime" id="uptime">업타임: --:--:--</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="connection-status" id="connectionStatus">
+          <span class="status-dot disconnected"></span>
+          <span>연결 중...</span>
+        </div>
+        <div class="current-time" id="currentTime">--:--:--</div>
+      </div>
+    </header>
+
+    <!-- 모니터링 컨트롤 -->
+    <div class="control-panel">
+      <div class="tracking-info">
+        <div class="tracking-status" id="trackingStatus">
+          <span class="tracking-icon">⏱️</span>
+          <span>추적 대기 중</span>
+        </div>
+        <div class="tracking-timer" id="trackingTimer">00:00 / 05:00</div>
+        <div class="tracking-progress">
+          <div class="progress-bar" id="trackingProgressBar"></div>
+        </div>
+      </div>
+      <div class="control-buttons">
+        <button class="btn btn-primary" id="startTrackingBtn">
+          <span>▶</span> 5분 추적 시작
+        </button>
+        <button class="btn btn-secondary" id="stopTrackingBtn" disabled>
+          <span>⏹</span> 추적 중지
+        </button>
+        <button class="btn btn-accent" id="exportPdfBtn" disabled>
+          <span>📄</span> PDF 내보내기
+        </button>
+      </div>
+    </div>
+
+    <!-- 메인 대시보드 -->
+    <main class="dashboard">
+      <!-- CPU 카드 -->
+      <div class="card card-cpu" id="cpuCard">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="card-icon">🔲</span>
+            <h2>CPU</h2>
+          </div>
+          <div class="card-value" id="cpuUsage">--%</div>
+        </div>
+        <div class="card-content">
+          <div class="gauge-container">
+            <canvas id="cpuGauge"></canvas>
+            <div class="gauge-center">
+              <span class="gauge-value" id="cpuGaugeValue">--</span>
+              <span class="gauge-label">%</span>
+            </div>
+          </div>
+          <div class="cpu-details">
+            <div class="detail-item">
+              <span class="detail-label">브랜드</span>
+              <span class="detail-value" id="cpuBrand">--</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">코어</span>
+              <span class="detail-value" id="cpuCores">--</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">온도</span>
+              <span class="detail-value temperature" id="cpuTemp">--°C</span>
+            </div>
+          </div>
+        </div>
+        <div class="card-chart">
+          <canvas id="cpuChart"></canvas>
+        </div>
+      </div>
+
+      <!-- 메모리 카드 -->
+      <div class="card card-memory" id="memoryCard">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="card-icon">💾</span>
+            <h2>메모리</h2>
+          </div>
+          <div class="card-value" id="memoryUsage">--%</div>
+        </div>
+        <div class="card-content">
+          <div class="memory-bar-container">
+            <div class="memory-bar">
+              <div class="memory-used" id="memoryUsedBar"></div>
+            </div>
+            <div class="memory-labels">
+              <span id="memoryUsedLabel">사용: --</span>
+              <span id="memoryTotalLabel">전체: --</span>
+            </div>
+          </div>
+          <div class="memory-details">
+            <div class="memory-stat">
+              <div class="stat-circle used"></div>
+              <div class="stat-info">
+                <span class="stat-label">사용 중</span>
+                <span class="stat-value" id="memUsed">--</span>
+              </div>
+            </div>
+            <div class="memory-stat">
+              <div class="stat-circle available"></div>
+              <div class="stat-info">
+                <span class="stat-label">사용 가능</span>
+                <span class="stat-value" id="memAvailable">--</span>
+              </div>
+            </div>
+            <div class="memory-stat">
+              <div class="stat-circle swap"></div>
+              <div class="stat-info">
+                <span class="stat-label">스왑</span>
+                <span class="stat-value" id="memSwap">--</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card-chart">
+          <canvas id="memoryChart"></canvas>
+        </div>
+      </div>
+
+      <!-- 네트워크 카드 -->
+      <div class="card card-network" id="networkCard">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="card-icon">🌐</span>
+            <h2>네트워크</h2>
+          </div>
+        </div>
+        <div class="card-content">
+          <div class="network-speeds">
+            <div class="speed-item download">
+              <span class="speed-icon">⬇️</span>
+              <div class="speed-info">
+                <span class="speed-label">다운로드</span>
+                <span class="speed-value" id="downloadSpeed">-- KB/s</span>
+              </div>
+            </div>
+            <div class="speed-item upload">
+              <span class="speed-icon">⬆️</span>
+              <div class="speed-info">
+                <span class="speed-label">업로드</span>
+                <span class="speed-value" id="uploadSpeed">-- KB/s</span>
+              </div>
+            </div>
+          </div>
+          <div class="network-totals">
+            <div class="total-item">
+              <span class="total-label">총 수신</span>
+              <span class="total-value" id="totalDownload">--</span>
+            </div>
+            <div class="total-item">
+              <span class="total-label">총 송신</span>
+              <span class="total-value" id="totalUpload">--</span>
+            </div>
+          </div>
+        </div>
+        <div class="card-chart">
+          <canvas id="networkChart"></canvas>
+        </div>
+      </div>
+
+      <!-- 디스크 카드 -->
+      <div class="card card-disk" id="diskCard">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="card-icon">💿</span>
+            <h2>디스크</h2>
+          </div>
+        </div>
+        <div class="card-content">
+          <div class="disk-list" id="diskList">
+            <!-- 디스크 항목이 동적으로 추가됨 -->
+          </div>
+          <div class="disk-io">
+            <div class="io-item">
+              <span class="io-icon read">📖</span>
+              <span class="io-label">읽기</span>
+              <span class="io-value" id="diskRead">-- KB/s</span>
+            </div>
+            <div class="io-item">
+              <span class="io-icon write">📝</span>
+              <span class="io-label">쓰기</span>
+              <span class="io-value" id="diskWrite">-- KB/s</span>
+            </div>
+          </div>
+        </div>
+        <div class="card-chart">
+          <canvas id="diskChart"></canvas>
+        </div>
+      </div>
+
+      <!-- GPU 카드 -->
+      <div class="card card-gpu" id="gpuCard">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="card-icon">🎮</span>
+            <h2>GPU</h2>
+          </div>
+        </div>
+        <div class="card-content">
+          <div class="gpu-info" id="gpuInfo">
+            <div class="gpu-placeholder">
+              <span class="placeholder-icon">🎮</span>
+              <span>GPU 정보 로딩 중...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 종합 히스토리 차트 -->
+      <div class="card card-history" id="historyCard">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="card-icon">📈</span>
+            <h2>5분 추적 기록</h2>
+          </div>
+          <div class="chart-legend">
+            <span class="legend-item cpu">● CPU</span>
+            <span class="legend-item memory">● 메모리</span>
+          </div>
+        </div>
+        <div class="card-content full-chart">
+          <canvas id="historyChart"></canvas>
+        </div>
+      </div>
+    </main>
+
+    <!-- 푸터 -->
+    <footer class="footer">
+      <span>시스템 리소스 실시간 모니터링 시스템 v1.0</span>
+      <span>데이터 갱신: 1초 간격</span>
+    </footer>
+  </div>
+
+  <!-- PDF 내보내기용 숨겨진 컨테이너 -->
+  <div id="pdfContainer" class="pdf-container"></div>
+
+  <!-- 상세 정보 모달 -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal" id="detailModal">
+      <div class="modal-header">
+        <h2 id="modalTitle">상세 정보</h2>
+        <button class="modal-close" id="modalClose">✕</button>
+      </div>
+      <div class="modal-content" id="modalContent">
+        <!-- 동적으로 내용이 채워짐 -->
+      </div>
+    </div>
+  </div>
+
+
+  <script src="app.js"></script>
+</body>
+</html>
